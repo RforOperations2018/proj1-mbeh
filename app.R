@@ -165,9 +165,9 @@ server <- function(input, output, session = session) {
   output$profit_scatterplot <- renderPlotly({
     scatterplot <- ggplot(movieData(), aes(x = Rating, y = Profit/1000000,
                                            text = paste0("<b>", Title, " (", Year, ")</b>",
-                                                         "<br>Revenue: ", format_financial_axis(Revenue),
-                                                         "<br>Budget: ", format_financial_axis(Budget),
-                                                         "<br>Profit: ", format_financial_axis(Profit),
+                                                         "<br>Revenue: ", format_financial_value(Revenue),
+                                                         "<br>Budget: ", format_financial_value(Budget),
+                                                         "<br>Profit: ", format_financial_value(Profit),
                                                          "<br>Rating: ", Rating))) + 
       geom_point(color="#605ca8") + 
       geom_hline(yintercept = 0, color = "red", size = 0.5) +

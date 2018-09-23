@@ -1,0 +1,115 @@
+/******************* GENERAL LAYOUT *******************/
+
+/* Sidebar styling */
+li {
+  font-size: 20px;
+  font-weight: lighter;
+}
+li > a > span {
+  padding-left: 5px;
+}
+.sidebar-menu {
+  padding-left: 20px;
+}
+.skin-purple .sidebar-menu > li > a {
+  border-left: unset;
+}
+.skin-purple .main-header .navbar .sidebar-toggle:hover {
+  background-color: unset;
+}
+
+/********** PLOTS AND DATATABLE PAGE STYLING **********/
+
+/* Increase tab container height for plotly graph */
+.tab-content {
+  height: 80vh;
+}
+/* Allow scrolling of datatable */
+.content-wrapper {
+  overflow-y: scroll;
+}
+.dataTables_wrapper {
+  overflow-x: scroll;
+}
+
+/********** CUSTOM STYLING FOR PAGE ELEMENTS **********/
+
+/* Button styling for purple theme */
+.btn-default {
+  color: #fff;
+  background-color: #605ca8;
+  border-color: #605ca8;
+}
+.btn-default:active, .btn-default:hover, .btn-default:focus {
+  color: #fff;
+  background-color: #545096;
+  border-color: #545096;
+}
+/* Button for downloading movie data */
+.btn-download {
+  margin-bottom: 15px;
+}
+/* Position button within datatable only for big screens */
+@media (min-width: 767px){
+  .btn-download {
+    position: absolute;
+    top: 75px;
+    right: 55px;
+    z-index: 1;
+  }
+}
+/* Custom styling/position of notifications */
+#shiny-notification-panel {
+  width: 300px;
+  right: unset;
+  left: 1px;
+}
+.shiny-notification-message {
+  color: #008d4c; 
+  background-color: #d9f7dd;
+  border: 1px solid #bcf1c0;
+}
+
+/********** RESPONSIVE LAYOUT FOR MOBILE DEVICES **********/
+
+@media (max-width: 767px){
+
+  /* improve header/navbar compactness */
+  .main-header span {
+     margin-left: 20px;
+  }
+  .main-header .navbar {
+    position: absolute;
+    top: 0px;
+    margin-left: unset;
+    width: 42px;
+  }
+
+  /* improve sidebar compactness */
+  .left-side, .main-sidebar {
+    padding-top: 50px;
+  }
+
+  /* smaller tabs on plots page */
+  ul.nav-tabs > li > a {
+    font-size: 11px;
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+
+  /* no container padding on datatables page */
+  section.content {
+    padding-left: 5px;
+    padding-right: 5px;
+  }
+  .container-fluid, .container-fluid > .col-sm-12 {
+    padding-left: 0px;
+    padding-right: 0px;
+  }
+
+  /* relative positioned, right-aligned download link */
+  .btn-download {
+    text-align: right;
+    margin-right: 5px;
+  }
+}

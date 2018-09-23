@@ -48,8 +48,7 @@ sidebar <- dashboardSidebar(
     # Sidebar Menu for 3 pages
     menuItem("Profitable Movies", icon = icon("dollar"), tabName = "profits"),
     menuItem("Battle of the Cos", icon = icon("bar-chart"), tabName = "companies"),
-    menuItem("Genre Analysis", icon = icon("bar-chart"), tabName = "genres"),
-    menuItem("Database", icon = icon("table"), tabName = "table"),
+    menuItem("Genre Analysis", icon = icon("table"), tabName = "genres"),
     # Range Slider for Movie Release Year
     sliderInput("yearSelect",
                 "Year of Movie Release:",
@@ -114,7 +113,7 @@ body <- dashboardBody(
                                    selectize = TRUE,
                                    selected = c("Marvel Studios", "DC Comics")),
                        # Button for selecting all production companies
-                       actionButton("selectAllCompanies", "Select All Companies", icon = icon("hand-pointer-o"))
+                       actionButton("selectAllCompaniesPage2", "Select All Companies", icon = icon("hand-pointer-o"))
                      )
               ),
               column(width = 8,
@@ -126,28 +125,28 @@ body <- dashboardBody(
     # Genre Breakdown page, to be displayed when "Genre Analysis" is clicked on sidebar
     tabItem("genres",
             fluidPage(
-              column(width = 4,
-                     wellPanel(
-                       # Selection for Movie Genre
-                       selectInput("companySelect3",
-                                   "Production Company Filter:",
-                                   choices = sort(unique(companies)),
-                                   multiple = TRUE,
-                                   selectize = TRUE,
-                                   selected = c("Walt Disney Pictures", "Warner Bros", "Marvel Studios", "DC Comics"))
-                     )
+              fluidRow(
+                column(width = 4,
+                       wellPanel(
+                         # Selection for Movie Genre
+                         selectInput("companySelect3",
+                                     "Production Company Filter:",
+                                     choices = sort(unique(companies)),
+                                     multiple = TRUE,
+                                     selectize = TRUE,
+                                     selected = c("Walt Disney Pictures", "Warner Bros", "Marvel Studios", "DC Comics")),
+                         # Button for selecting all production companies
+                         actionButton("selectAllCompaniesPage3", "Select All Companies", icon = icon("hand-pointer-o"))
+                       )
+                ),
+                column(width = 8,
+                       # Bar Chart of Genres
+                       plotlyOutput("genres_barchart")
+                )
               ),
-              column(width = 8,
-                     # Bar Chart of Genres
-                     plotlyOutput("genres_barchart")
+              fluidRow(
+                box(title = "Genre Counts in Tabular Format", DT::dataTableOutput("genreCountsTable"), width = 12)
               )
-            )
-    ),
-    # DataTable page, to be displayed when "Table" is clicked on sidebar
-    tabItem("table",
-            fluidPage(
-              div(class = "btn-download", downloadButton("downloadMovieData","Download Data")),
-              box(title = "Movie Selection", DT::dataTableOutput("moviesTable"), width = 12)
             )
     )
   )
@@ -302,17 +301,16 @@ server <- function(input, output, session = session) {
                                                               "<br>Genre: ", Genre,
                                                               "<br>Count: ", Counts))) +
                   geom_bar(stat="identity", position = "dodge")
-    ggplotly(barchart, tooltip = "text", height = 400)
+    ggplotly(barchart, tooltip = "text", height = 350)
   })
   
-  # Data table of Movies (based on reactive selection)
-  output$moviesTable <- DT::renderDataTable({
-    subset(movieData() %>% arrange(desc(Year), desc(Revenue)), 
-           select = c(Title, Year, Profit, Budget, Revenue, Rating))
-  }
-  # Customize column names of Data Table
-  # colnames = c("Title", "Year", "Budget", "Revenue", "Ratings (/10)")
-  )
+  # Data Table of Genre Counts (based on reactive selection)
+  output$genreCountsTable <- DT::renderDataTable({
+    reactive_data <- movieDataCountsByGenre()
+    counts <- as.data.frame(t(reactive_data[,-1]))
+    colnames(counts) <- reactive_data$Company
+    counts
+  })
 
   # Observe clicks on 'Select All Genres' button
   observeEvent(input$selectAllGenres, {
@@ -327,28 +325,28 @@ server <- function(input, output, session = session) {
   })
 
   # Observe clicks on 'Select All Companies' button
-  observeEvent(input$selectAllCompanies, {
+  observeEvent(input$selectAllCompaniesPage2, {
     # Send error notification if all genres have already been selected
-    if (length(input$companySelect) == length(companies)){
+    if (length(input$companySelect2) == length(companies)){
       showNotification("Already selected all of them!", type = "error")
     }else{
       # Otherwise, update input for genre selection and send success notification
-      updateSelectInput(session, "companySelect", selected = companies)
+      updateSelectInput(session, "companySelect2", selected = companies)
       showNotification("All companies are selected!", type = "message")
     }
   })
   
-  # Download filtered data from the movie datatable
-  output$downloadMovieData <- downloadHandler(
-    filename = function() {
-      paste("movies-", Sys.Date(), ".csv", sep="")
-    },
-    content = function(file) {
-      dataForDownload = subset(movieData() %>% arrange(desc(Year), desc(revenue)),
-                               select = c(title, genres, release_date, budget, revenue, Rating))
-      write.csv(dataForDownload, file, row.names=FALSE)
+  # Observer - similar to above method but for page 3
+  observeEvent(input$selectAllCompaniesPage3, {
+    # Send error notification if all genres have already been selected
+    if (length(input$companySelect3) == length(companies)){
+      showNotification("Already selected all of them!", type = "error")
+    }else{
+      # Otherwise, update input for genre selection and send success notification
+      updateSelectInput(session, "companySelect3", selected = companies)
+      showNotification("All companies are selected!", type = "message")
     }
-  )
+  })
 }
 
 # Run the application 

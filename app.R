@@ -47,9 +47,9 @@ sidebar <- dashboardSidebar(
     id = "tabs",
     # Sidebar Menu for 3 pages
     menuItem("Profitable Movies", icon = icon("dollar"), tabName = "profits"),
+    menuItem("Battle of the Cos", icon = icon("bar-chart"), tabName = "companies"),
     menuItem("Genre Analysis", icon = icon("bar-chart"), tabName = "genres"),
     menuItem("Database", icon = icon("table"), tabName = "table"),
-    #menuItem("Visualizations", icon = icon("bar-chart"), tabName = "plots"),
     # Range Slider for Movie Release Year
     sliderInput("yearSelect",
                 "Year of Movie Release:",
@@ -97,8 +97,8 @@ body <- dashboardBody(
               )
             )
     ),
-    # Genre Breakdown page, to be displayed when "Genre Analysis" is clicked on sidebar
-    tabItem("genres",
+    # Company Comparison page, to be displayed when "Battle of the Cos" is clicked on sidebar
+    tabItem("companies",
             fluidPage(
               column(width = 4,
                      wellPanel(
@@ -106,6 +106,28 @@ body <- dashboardBody(
                        radioButtons("xaxisValue", label = "X-Axis Value:",
                                     choices = list("Movie Duration" = "Runtime", "Average Ratings" = "Rating"), 
                                     selected = "Runtime"),
+                       # Selection for specific production companies that filtered movies must be produced by
+                       selectInput("companySelect",
+                                   "Production Company Filter:",
+                                   choices = sort(unique(companies)),
+                                   multiple = TRUE,
+                                   selectize = TRUE,
+                                   selected = c("Marvel Studios", "DC Comics")),
+                       # Button for selecting all production companies
+                       actionButton("selectAllCompanies", "Select All Companies", icon = icon("hand-pointer-o"))
+                     )
+              ),
+              column(width = 8,
+                     # Comparison of budget across companies on a scatterplot
+                     plotlyOutput("company_profits")
+              )
+            )
+    ),
+    # Genre Breakdown page, to be displayed when "Genre Analysis" is clicked on sidebar
+    tabItem("genres",
+            fluidPage(
+              column(width = 4,
+                     wellPanel(
                        # Selection for Movie Genre
                        selectInput("companySelect",
                                    "Production Company Filter:",
@@ -116,22 +138,8 @@ body <- dashboardBody(
                      )
               ),
               column(width = 8,
-                     # Comparison of budget across companies on a scatterplot
-                     plotlyOutput("company_profits")
                      # Bar Chart of Genres
-                     #plotlyOutput("genres_barchart")
-              )
-            )
-    ),
-    # Plots page, to be displayed when "Plots" is clicked on sidebar
-    tabItem("plots",
-            fluidRow(
-              # Tab Panel for 3 plots
-              tabBox(title = "",
-                     width = 12,
-                     tabPanel("Revenue vs Budget", plotlyOutput("plot_budget_and_revenue")),
-                     tabPanel("Ratings by Genre", plotlyOutput("plot_ratings")),
-                     tabPanel("Movie Duration", plotlyOutput("plot_durations"))
+                     plotlyOutput("genres_barchart")
               )
             )
     ),
@@ -332,6 +340,18 @@ server <- function(input, output, session = session) {
       # Otherwise, update input for genre selection and send success notification
       updateSelectInput(session, "genreSelect", selected = genres)
       showNotification("Success! You selected all genres!", type = "message")
+    }
+  })
+
+  # Observe clicks on 'Select All Companies' button
+  observeEvent(input$selectAllCompanies, {
+    # Send error notification if all genres have already been selected
+    if (length(input$companySelect) == length(companies)){
+      showNotification("Already selected all of them!", type = "error")
+    }else{
+      # Otherwise, update input for genre selection and send success notification
+      updateSelectInput(session, "companySelect", selected = companies)
+      showNotification("All companies are selected!", type = "message")
     }
   })
   

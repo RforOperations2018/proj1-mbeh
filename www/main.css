@@ -60,7 +60,7 @@ li > a > span {
 }
 /* Custom styling/position of notifications */
 #shiny-notification-panel {
-  width: 300px;
+  width: 250px;
   right: unset;
   left: 1px;
 }

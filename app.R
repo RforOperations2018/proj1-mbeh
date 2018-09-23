@@ -140,7 +140,6 @@ server <- function(input, output, session = session) {
     return(movies)
   })
   
-  
   # :::GAUGES, VALUE/INFO BOXES::: Provide stats based on filtered result from reactive method
   # Info box that calculates most profitable movie based on user input filters
   output$topProfit <- renderInfoBox({
@@ -161,7 +160,24 @@ server <- function(input, output, session = session) {
     percentage <- round(100 * nrow(movieData()) / nrow(movies.load),2)
     gauge(percentage, min = 0, max = 100, symbol = '%')
   })
-  
+
+  # :::PROFITABILITY::: Scatterplot that displays filtered movies' profits vs average ratings
+  output$profit_scatterplot <- renderPlotly({
+    scatterplot <- ggplot(movieData(), aes(x = Rating, y = Profit/1000000,
+                                           text = paste0("<b>", Title, " (", Year, ")</b>",
+                                                         "<br>Revenue: ", format_financial_axis(Revenue),
+                                                         "<br>Budget: ", format_financial_axis(Budget),
+                                                         "<br>Profit: ", format_financial_axis(Profit),
+                                                         "<br>Rating: ", Rating))) + 
+      geom_point(color="#605ca8") + 
+      geom_hline(yintercept = 0, color = "red", size = 0.5) +
+      ggtitle("Movie Profitability and Average Ratings") +
+      xlab("Average Rating out of 10") +
+      ylab("Profit (in Millions)") +
+      scale_y_continuous(label=scales::dollar_format(big.mark=','))
+    ggplotly(scatterplot, tooltip = "text", height = 400)
+  })
+    
   # A plot showing a line chart of movie budget and revenue over the years
   output$plot_budget_and_revenue <- renderPlotly({
     # Aggregate budget and revenue data by year

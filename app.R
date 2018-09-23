@@ -78,9 +78,9 @@ body <- dashboardBody(
                      fluidRow(
                        # Gauge indicator of % of dataset being visualized on the scatterplot
                        box(title="% of Dataset Selected", gaugeOutput("percData", height = "120px"), width = 12),
-                       # Info box that calculates most profitable movie based on user input filters
+                       # Info box for displaying Movie Title/Year with highest profit, and profit amount
                        infoBoxOutput("topProfit", width = 12),
-                       # Value box that calculates average profit of all movies within user input filters
+                       # Value box for displaying average profit
                        valueBoxOutput("avgProfit")
                      )
               ),
@@ -142,19 +142,24 @@ server <- function(input, output, session = session) {
   
   
   # :::GAUGES, VALUE/INFO BOXES::: Provide stats based on filtered result from reactive method
-  # Info box for displaying Movie Title with highest profit
+  # Info box that calculates most profitable movie based on user input filters
   output$topProfit <- renderInfoBox({
     most_profitable <- movieData() %>% arrange(desc(Profit)) %>% head(1)
     infoBox('Most Profitable Movie', value = paste0(most_profitable$Title, ' (', most_profitable$Year, ')'),
                                                     subtitle = paste("Profit:", format_financial_value(most_profitable$Profit)),
             icon = icon('trophy'), color = 'purple')
   })
-  # Value box for displaying average profit
+  # Value box that calculates average profit of all movies within user input filters
   output$avgProfit <- renderValueBox({
     average_profit <- round(mean(movieData()$Profit, na.rm = T), 2)
     shinydashboard::valueBox(subtitle = "Average Profit (Revenue minus Budget)", 
                              value = format_financial_value(average_profit), icon = icon("dollar"), 
                              color = "purple", width = 12)
+  })
+  # Gauge indicator of % of dataset filtered vs original dataset
+  output$percData <- renderGauge({
+    percentage <- round(100 * nrow(movieData()) / nrow(movies.load),2)
+    gauge(percentage, min = 0, max = 100, symbol = '%')
   })
   
   # A plot showing a line chart of movie budget and revenue over the years

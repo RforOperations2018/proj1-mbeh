@@ -76,7 +76,7 @@ body <- dashboardBody(
             fluidPage(
               column(width = 4,
                      fluidRow(
-                       # Gauge indicator of % of dataset that is visualized on the scatterplot
+                       # Gauge indicator of % of dataset being visualized on the scatterplot
                        box(title="% of Dataset Selected", gaugeOutput("percData", height = "120px"), width = 12),
                        # Info box that calculates most profitable movie based on user input filters
                        infoBoxOutput("topProfit", width = 12),
@@ -119,15 +119,7 @@ ui <- dashboardPage(title = "MovieCharts",
 # Define server logic
 server <- function(input, output, session = session) {
   
-  # Info box for displaying Movie Title with highest profit
-  output$topProfit <- renderInfoBox({
-    most_profitable <- movieData() %>% arrange(desc(Profit)) %>% head(1)
-    infoBox('Most Profitable Movie', value = paste0(most_profitable$Title, ' (', most_profitable$Year, ')'),
-                                                    subtitle = paste("Profit:", format_financial_value(most_profitable$Profit)),
-            icon = icon('trophy'), color = 'purple')
-  })
-  
-  # Filtered movie data using reactive method
+  # :::REACTIVE METHOD::: Filter movie dataset based on user inputs
   movieData <- reactive({
     # Helper function for determining if a movie contains a genre within list of selected genres
     movieMatchesGenreInput <- function(genresString, selectedGenres){
@@ -146,6 +138,23 @@ server <- function(input, output, session = session) {
       movies <- filter(movies, movieMatchesGenreInput(genres, input$genreSelect))
     }
     return(movies)
+  })
+  
+  
+  # :::GAUGES, VALUE/INFO BOXES::: Provide stats based on filtered result from reactive method
+  # Info box for displaying Movie Title with highest profit
+  output$topProfit <- renderInfoBox({
+    most_profitable <- movieData() %>% arrange(desc(Profit)) %>% head(1)
+    infoBox('Most Profitable Movie', value = paste0(most_profitable$Title, ' (', most_profitable$Year, ')'),
+                                                    subtitle = paste("Profit:", format_financial_value(most_profitable$Profit)),
+            icon = icon('trophy'), color = 'purple')
+  })
+  # Value box for displaying average profit
+  output$avgProfit <- renderValueBox({
+    average_profit <- round(mean(movieData()$Profit, na.rm = T), 2)
+    shinydashboard::valueBox(subtitle = "Average Profit (Revenue minus Budget)", 
+                             value = format_financial_value(average_profit), icon = icon("dollar"), 
+                             color = "purple", width = 12)
   })
   
   # A plot showing a line chart of movie budget and revenue over the years

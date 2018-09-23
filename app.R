@@ -230,6 +230,47 @@ server <- function(input, output, session = session) {
     return(filtered_data)
   })
   
+  # :::COMPANY COMPARISON CHART::: Scatterplot that shows budget comparison for selected production companies
+  output$company_profits <- renderPlotly({
+    filtered_data <- movieDataWithCompanyFilter() # retrieve filtered movie data from reactive method
+    if(input$xaxisValue == "Runtime"){            # modify column for x-axis based on user input
+      xaxis_data <- filtered_data$Runtime
+      xaxis_label <- "Duration (in minutes)"
+      tooltip_field <- "Duration"
+    }else{
+      xaxis_data <- filtered_data$Rating
+      xaxis_label <- "Average Ratings (out of 10)"
+      tooltip_field <- "Ratings"
+    }
+    scatterplot <- ggplot(filtered_data, aes(x = xaxis_data, y = Budget/1000000, color=Company,
+                                             text = paste0("<b>", Title, " (", Year, ")</b>",
+                                                           "<br>Company: ", Company,
+                                                           "<br>", tooltip_field, ": ", xaxis_data,
+                                                           "<br>Budget: ", format_financial_value(Profit)))) + 
+      geom_point() + 
+      ggtitle(paste("Movie", tooltip_field, "versus Budget: With Company Breakdown")) +
+      xlab(xaxis_label) +
+      ylab("Budget (in Millions)") +
+      labs(color = "") + # hide legend for cleaner graphing
+      scale_y_continuous(label=scales::dollar_format(big.mark=','))
+    ggplotly(scatterplot, tooltip = "text", height = 400)
+  })
+  
+  # :::GENRE BREAKDOWN CHART::: Bar chart that shows genre breakdown for each production company
+  output$genres_barchart <- renderPlotly({
+    scatterplot <- ggplot(movieDataWithCompanyFilter(), aes(x = Rating, y = Profit/1000000, color=Company,
+                                                            text = paste0("<b>", Title, " (", Year, ")</b>",
+                                                                          "<br>Rating: ", Rating,
+                                                                          "<br>Profit: ", format_financial_value(Profit)))) + 
+      geom_point() + 
+      geom_hline(yintercept=0, linetype="dashed", color = "red", size=0.5) +
+      ggtitle("Rating vs Profit") +
+      xlab("Rating") +
+      ylab("Profit (in Millions)") +
+      scale_y_continuous(label=scales::dollar_format(big.mark=','))
+    ggplotly(barchart, tooltip = "text", height = 400)
+  })
+  
   # A plot showing a line chart of movie budget and revenue over the years
   output$plot_budget_and_revenue <- renderPlotly({
     # Aggregate budget and revenue data by year

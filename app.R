@@ -21,16 +21,22 @@ plotlyDefaultFont <- list(
 )
 # Helper function for formatting profit/budget/revenue data on plotly axes
 format_financial_value <- function(amount){
-  ifelse(amount > 1000000000, paste0('$', round(amount/1000000000, 2), 'B'),
-         paste0('$', round(amount/1000000, 2), 'M'))
+  ifelse(amount > 1000000000, 
+         paste0('$', round(amount/1000000000, 2), 'B'), # format billions
+         ifelse(amount > 0,
+                paste0('$', round(amount/1000000, 2), 'M'), # format millions
+                paste0('-$', round(-amount/1000000, 2), 'M')) # format negative values
+         ) 
 }
 
 # load dataset (to be filtered by reactive function later)
 movies.load <- read.csv('data/movies.csv', stringsAsFactors=FALSE)
 genres <- c('Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 'Drama', 
             'Family', 'Fantasy', 'History', 'Horror', 'Romance', 'Scifi', 'Thriller', 'War')
-# pixaranimationstudios	warnerbros	paramountpictures	columbiapictures	metrogoldwynmayer	universalpictures	waltdisneypictures	marvelstudios	dccomics
-# note: these genres do not represent all genres in the dataset, but are particularly popular ones
+companies <- c('Pixar Animation Studios',	'Warner Bros', 'Paramount Pictures', 'Columbia Pictures',
+               'Metro Goldwyn Mayer',	'Universal Pictures', 'Lucasfilm', 'Walt Disney Pictures', 
+               'Marvel Studios',	'DC Comics')
+# note: these companies do not represent all companies in the dataset, but are particularly popular ones
 pdf(NULL)
 
 # Define header, sidebar and body of shinydashboard
@@ -41,8 +47,9 @@ sidebar <- dashboardSidebar(
     id = "tabs",
     # Sidebar Menu for 3 pages
     menuItem("Profitable Movies", icon = icon("dollar"), tabName = "profits"),
+    menuItem("Genre Analysis", icon = icon("bar-chart"), tabName = "genres"),
     menuItem("Database", icon = icon("table"), tabName = "table"),
-    menuItem("Visualizations", icon = icon("bar-chart"), tabName = "plots"),
+    #menuItem("Visualizations", icon = icon("bar-chart"), tabName = "plots"),
     # Range Slider for Movie Release Year
     sliderInput("yearSelect",
                 "Year of Movie Release:",
@@ -54,7 +61,7 @@ sidebar <- dashboardSidebar(
                 step = 1),
     # Selection for Movie Genre
     selectInput("genreSelect",
-                "Genre:",
+                "Genre Filter:",
                 width = sidebarWidth - 50,
                 choices = sort(unique(genres)),
                 multiple = TRUE,
@@ -87,6 +94,32 @@ body <- dashboardBody(
               column(width = 8,
                      # Scatterplot of Movie Profitability and Average Ratings
                      plotlyOutput("profit_scatterplot")
+              )
+            )
+    ),
+    # Genre Breakdown page, to be displayed when "Genre Analysis" is clicked on sidebar
+    tabItem("genres",
+            fluidPage(
+              column(width = 4,
+                     wellPanel(
+                       # Selection of x-axis value
+                       radioButtons("xaxisValue", label = "X-Axis Value:",
+                                    choices = list("Movie Duration" = "Runtime", "Average Ratings" = "Rating"), 
+                                    selected = "Runtime"),
+                       # Selection for Movie Genre
+                       selectInput("companySelect",
+                                   "Production Company Filter:",
+                                   choices = sort(unique(companies)),
+                                   multiple = TRUE,
+                                   selectize = TRUE,
+                                   selected = c("Marvel Studios", "DC Comics"))
+                     )
+              ),
+              column(width = 8,
+                     # Comparison of budget across companies on a scatterplot
+                     plotlyOutput("company_profits")
+                     # Bar Chart of Genres
+                     #plotlyOutput("genres_barchart")
               )
             )
     ),
@@ -161,7 +194,7 @@ server <- function(input, output, session = session) {
     gauge(percentage, min = 0, max = 100, symbol = '%')
   })
 
-  # :::PROFITABILITY::: Scatterplot that displays filtered movies' profits vs average ratings
+  # :::PROFITABILITY CHART::: Scatterplot that displays filtered movies' profits vs average ratings
   output$profit_scatterplot <- renderPlotly({
     scatterplot <- ggplot(movieData(), aes(x = Rating, y = Profit/1000000,
                                            text = paste0("<b>", Title, " (", Year, ")</b>",
@@ -177,7 +210,26 @@ server <- function(input, output, session = session) {
       scale_y_continuous(label=scales::dollar_format(big.mark=','))
     ggplotly(scatterplot, tooltip = "text", height = 400)
   })
+  
+  # :::COMPANY REACTIVE METHOD::: Filter movie dataset based on production company input
+  movieDataWithCompanyFilter <- reactive({
+    reactive_movie_data <- as.data.frame(movieData())  # retrieve movie data from reactive method
+    company_selection <- companies         # use all companies if there were 0 companies selected
+    if (length(input$companySelect) > 0){
+      company_selection <- input$companySelect # retrieve selection filter input for Production Company
+    }
     
+    filtered_data <- head(reactive_movie_data, 0) # start with empty table populated with columns from dataset
+    for(company_display_name in company_selection){
+      # convert company display name to corresponding column name in the dataset
+      colname <- paste(unlist(strsplit(tolower(company_display_name), ' ')), collapse='')
+      movies_by_company <- reactive_movie_data %>% filter(reactive_movie_data[colname] == 1)
+      movies_by_company$Company <- company_display_name
+      filtered_data <- rbind(filtered_data, movies_by_company)
+    }
+    return(filtered_data)
+  })
+  
   # A plot showing a line chart of movie budget and revenue over the years
   output$plot_budget_and_revenue <- renderPlotly({
     # Aggregate budget and revenue data by year

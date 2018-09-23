@@ -296,11 +296,13 @@ server <- function(input, output, session = session) {
   # :::GENRE BREAKDOWN CHART::: Bar chart that shows genre breakdown for each production company
   output$genres_barchart <- renderPlotly({
     melted_genre_counts <- movieDataCountsByGenre() %>% melt(id.vars = 1, variable.name = 'Genre', value.name = 'Counts')
-    barchart <- ggplot(melted_genre_counts, aes(x = Genre, y = Counts, colour = Company, fill = Company,
+    barchart <- ggplot(melted_genre_counts, aes(x = Genre, y = Counts, fill = Company,
                                                 text = paste0("<b>", Company, "</b>",
                                                               "<br>Genre: ", Genre,
                                                               "<br>Count: ", Counts))) +
-                  geom_bar(stat="identity", position = "dodge")
+                  geom_bar(stat="identity", position = "dodge") +
+                  ggtitle("Genre Profiles for Each Company") +
+                  labs(fill = "") # hide legend for cleaner graphing
     ggplotly(barchart, tooltip = "text", height = 350)
   })
   

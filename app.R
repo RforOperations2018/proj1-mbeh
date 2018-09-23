@@ -3,23 +3,33 @@
 
 library(shiny)
 library(shinydashboard)
+library(flexdashboard)
 library(reshape2)
 library(dplyr)
 library(plotly)
 library(RColorBrewer)
 
+# Set locale in case of issues loading dataset
+Sys.setlocale('LC_ALL','C')
+
 # ui configuration
-sidebarWidth <- 300
+sidebarWidth <- 250
 plotlyDefaultFont <- list(
   family = "Arial",
   size = 18,
   color = "#000000"
 )
+# Helper function for formatting profit/budget/revenue data on plotly axes
+format_financial_value <- function(amount){
+  ifelse(amount > 1000000000, paste0('$', round(amount/1000000000, 2), 'B'),
+         paste0('$', round(amount/1000000, 2), 'M'))
+}
 
 # load dataset (to be filtered by reactive function later)
 movies.load <- read.csv('data/movies.csv', stringsAsFactors=FALSE)
-genres <- c('Action', 'Animation', 'Comedy', 'Crime', 'Drama', 'Family', 'Fantasy', 
-            'History', 'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'War')
+genres <- c('Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 'Drama', 
+            'Family', 'Fantasy', 'History', 'Horror', 'Romance', 'Scifi', 'Thriller', 'War')
+# pixaranimationstudios	warnerbros	paramountpictures	columbiapictures	metrogoldwynmayer	universalpictures	waltdisneypictures	marvelstudios	dccomics
 # note: these genres do not represent all genres in the dataset, but are particularly popular ones
 pdf(NULL)
 
@@ -29,26 +39,19 @@ sidebar <- dashboardSidebar(
   width = sidebarWidth,
   sidebarMenu(
     id = "tabs",
-    # Sidebar Menu fo DataTable & Plots
+    # Sidebar Menu for 3 pages
+    menuItem("Profitable Movies", icon = icon("dollar"), tabName = "profits"),
     menuItem("Database", icon = icon("table"), tabName = "table"),
     menuItem("Visualizations", icon = icon("bar-chart"), tabName = "plots"),
     # Range Slider for Movie Release Year
     sliderInput("yearSelect",
                 "Year of Movie Release:",
-                width = sidebarWidth - 60,
-                min = min(movies.load$release_year, na.rm = T),
-                max = max(movies.load$release_year, na.rm = T),
-                value = c(min(movies.load$release_year, na.rm = T), max(movies.load$release_year, na.rm = T)),
+                width = sidebarWidth - 50,
+                min = min(movies.load$Year, na.rm = T),
+                max = max(movies.load$Year, na.rm = T),
+                value = c(min(movies.load$Year, na.rm = T), max(movies.load$Year, na.rm = T)),
                 sep = '',
                 step = 1),
-    # Numeric Input for Minimum Movie Revenue
-    numericInput("revenueMinimum", 
-                 "Minimum Revenue in USD",
-                 width = sidebarWidth - 60,
-                 min = min(movies.load$revenue, na.rm = T),
-                 max = max(movies.load$revenue, na.rm = T),
-                 value = min(movies.load$revenue, na.rm = T),
-                 step = 100000),
     # Selection for Movie Genre
     selectInput("genreSelect",
                 "Genre:",
@@ -56,19 +59,37 @@ sidebar <- dashboardSidebar(
                 choices = sort(unique(genres)),
                 multiple = TRUE,
                 selectize = TRUE,
-                selected = c("Action", "Animation", "Comedy", "Drama", "Fantasy", "Romance")),
+                selected = c("Action", "Comedy")),
     # Button for selecting all genres
     actionButton("selectAllGenres", "Select All Genres", icon = icon("hand-pointer-o"))
   )
 )
 body <- dashboardBody(
-  # import custom css stylesheet
+  # Import custom css stylesheet
   tags$head(
     tags$link(rel = "stylesheet", type = "text/css", href = "main.css"),
     tags$link(rel = "shortcut icon", href = "favicon-chart.ico")
   ),
-  width = 400,
   tabItems(
+    # Movie Profitability page, to be displayed when "Profitable Movies" is clicked on sidebar
+    tabItem("profits",
+            fluidPage(
+              column(width = 4,
+                     fluidRow(
+                       # Gauge indicator of % of dataset that is visualized on the scatterplot
+                       box(title="% of Dataset Selected", gaugeOutput("percData", height = "120px"), width = 12),
+                       # Info box that calculates most profitable movie based on user input filters
+                       infoBoxOutput("topProfit", width = 12),
+                       # Value box that calculates average profit of all movies within user input filters
+                       valueBoxOutput("avgProfit")
+                     )
+              ),
+              column(width = 8,
+                     # Scatterplot of Movie Profitability and Average Ratings
+                     plotlyOutput("profit_scatterplot")
+              )
+            )
+    ),
     # Plots page, to be displayed when "Plots" is clicked on sidebar
     tabItem("plots",
             fluidRow(
@@ -77,14 +98,16 @@ body <- dashboardBody(
                      width = 12,
                      tabPanel("Revenue vs Budget", plotlyOutput("plot_budget_and_revenue")),
                      tabPanel("Ratings by Genre", plotlyOutput("plot_ratings")),
-                     tabPanel("Movie Duration", plotlyOutput("plot_durations")))
+                     tabPanel("Movie Duration", plotlyOutput("plot_durations"))
+              )
             )
     ),
     # DataTable page, to be displayed when "Table" is clicked on sidebar
     tabItem("table",
             fluidPage(
               div(class = "btn-download", downloadButton("downloadMovieData","Download Data")),
-              box(title = "Movie Selection", DT::dataTableOutput("moviesTable"), width = 12))
+              box(title = "Movie Selection", DT::dataTableOutput("moviesTable"), width = 12)
+            )
     )
   )
 )
@@ -95,6 +118,14 @@ ui <- dashboardPage(title = "MovieCharts",
 
 # Define server logic
 server <- function(input, output, session = session) {
+  
+  # Info box for displaying Movie Title with highest profit
+  output$topProfit <- renderInfoBox({
+    most_profitable <- movieData() %>% arrange(desc(Profit)) %>% head(1)
+    infoBox('Most Profitable Movie', value = paste0(most_profitable$Title, ' (', most_profitable$Year, ')'),
+                                                    subtitle = paste("Profit:", format_financial_value(most_profitable$Profit)),
+            icon = icon('trophy'), color = 'purple')
+  })
   
   # Filtered movie data using reactive method
   movieData <- reactive({
@@ -108,9 +139,7 @@ server <- function(input, output, session = session) {
       return(outcome)
     }
     # Slider Filter for Release Year of Movie
-    movies <- movies.load %>% filter(release_year >= input$yearSelect[1] & release_year <= input$yearSelect[2],
-                                     # Numeric Filter for Minimum Revenue
-                                     revenue >= input$revenueMinimum)
+    movies <- movies.load %>% filter(Year >= input$yearSelect[1] & Year <= input$yearSelect[2])
     
     # Selection Filter for Movie Genre
     if (length(input$genreSelect) > 0){
@@ -122,11 +151,11 @@ server <- function(input, output, session = session) {
   # A plot showing a line chart of movie budget and revenue over the years
   output$plot_budget_and_revenue <- renderPlotly({
     # Aggregate budget and revenue data by year
-    aggregatedDataByYear <- movieData() %>% group_by(release_year) %>% 
-      summarise(budget = mean(budget), revenue = mean(revenue))
+    aggregatedDataByYear <- movieData() %>% group_by(Year) %>% 
+      summarise(Budget = mean(Budget), Revenue = mean(Revenue))
     # Plot movie budget and revenue over the years
-    plot_ly(aggregatedDataByYear, x = ~release_year, y = ~revenue, name = 'Revenue', type = 'scatter', mode = 'lines+markers') %>%
-      add_trace(y = ~budget, name = 'Budget', mode = 'lines+markers') %>%
+    plot_ly(aggregatedDataByYear, x = ~Year, y = ~Revenue, name = 'Revenue', type = 'scatter', mode = 'lines+markers') %>%
+      add_trace(y = ~Budget, name = 'Budget', mode = 'lines+markers') %>%
       layout(title = "Over the years: Average Revenue vs Budget for Blockbusters",
              xaxis = list(title = "Year", titlefont = plotlyDefaultFont),
              yaxis = list(title = "Amount in USD$", titlefont = plotlyDefaultFont),
@@ -137,19 +166,11 @@ server <- function(input, output, session = session) {
   # A plot showing a bar chart of average ratings per genre
   output$plot_ratings <- renderPlotly({
     movies <- movieData()
-    # Helper method for converting genre name to its column name in the dataset
-    convertGenreToColname <- function(genre){
-      col_name = tolower(genre)
-      if(genre == 'Science Fiction'){
-        col_name = 'scifi'
-      }
-      col_name
-    }
     # Calculate the average rating for each selected genre and add to vector
     averageRatingForEachGenre = c()
     for(genre in input$genreSelect){
       print(genre)
-      moviesForThisGenre <- filter(movies, as.logical(movies[[convertGenreToColname(genre)]]))
+      moviesForThisGenre <- filter(movies, as.logical(movies[[genre]]))
       print(nrow(moviesForThisGenre))
       averageRatingForEachGenre <- c(averageRatingForEachGenre, mean(moviesForThisGenre$Rating))
     }
@@ -158,38 +179,36 @@ server <- function(input, output, session = session) {
             marker = list(color = brewer.pal(length(input$genreSelect), "Greens"))) %>%
       layout(title = "Average Ratings by Genre",
              xaxis = list(title = "Genre", titlefont = plotlyDefaultFont),
-             yaxis = list(title = "Average Ratings", titlefont = plotlyDefaultFont),
-             height = 400)
+             yaxis = list(title = "Average Ratings", titlefont = plotlyDefaultFont))
   })
   
   # A plot showing a histogram of movie durations
   output$plot_durations <- renderPlotly({
-    plot_ly(x = movieData()$runtime, type = 'histogram') %>%
+    plot_ly(x = movieData()$Runtime, type = 'histogram') %>%
       layout(title = "Histogram of Movie Durations",
              xaxis = list(title = "Duration in Seconds", titlefont = plotlyDefaultFont),
-             yaxis = list(title = "Number of Movies", titlefont = plotlyDefaultFont),
-             height = 400)
+             yaxis = list(title = "Number of Movies", titlefont = plotlyDefaultFont))
     
   })
   
   # Data table of Movies (based on reactive selection)
   output$moviesTable <- DT::renderDataTable({
-    subset(movieData() %>% arrange(desc(release_year), desc(revenue)), 
-           select = c(title, genres, release_date, budget, revenue, Rating))
-  }, 
+    subset(movieData() %>% arrange(desc(Year), desc(Revenue)), 
+           select = c(Title, Year, Profit, Budget, Revenue, Rating))
+  }
   # Customize column names of Data Table
-  colnames = c("Title", "Genre", "Release Date", "Budget", "Revenue", "Ratings (/10)")
+  # colnames = c("Title", "Year", "Budget", "Revenue", "Ratings (/10)")
   )
 
   # Observe clicks on 'Select All Genres' button
   observeEvent(input$selectAllGenres, {
     # Send error notification if all genres have already been selected
     if (length(input$genreSelect) == length(genres)){
-      showNotification("You have already selected all genres!", type = "error")
-      # Otherwise, update input for genre selection and send success notification
+      showNotification("You've already selected all genres!", type = "error")
     }else{
+      # Otherwise, update input for genre selection and send success notification
       updateSelectInput(session, "genreSelect", selected = genres)
-      showNotification("Success! You have selected all genres!", type = "message")
+      showNotification("Success! You selected all genres!", type = "message")
     }
   })
   
@@ -199,7 +218,7 @@ server <- function(input, output, session = session) {
       paste("movies-", Sys.Date(), ".csv", sep="")
     },
     content = function(file) {
-      dataForDownload = subset(movieData() %>% arrange(desc(release_year), desc(revenue)),
+      dataForDownload = subset(movieData() %>% arrange(desc(Year), desc(revenue)),
                                select = c(title, genres, release_date, budget, revenue, Rating))
       write.csv(dataForDownload, file, row.names=FALSE)
     }

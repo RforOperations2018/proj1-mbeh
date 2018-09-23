@@ -67,6 +67,7 @@ sidebar <- dashboardSidebar(
                 selectize = TRUE,
                 selected = c("Action", "Comedy")),
     # Button for selecting all genres
+    # I think you could have done an update to the button so that once everything was selected it became disabled using shinyjs()
     actionButton("selectAllGenres", "Select All Genres", icon = icon("hand-pointer-o"))
   )
 )

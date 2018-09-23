@@ -107,7 +107,7 @@ body <- dashboardBody(
                                     choices = list("Movie Duration" = "Runtime", "Average Ratings" = "Rating"), 
                                     selected = "Runtime"),
                        # Selection for specific production companies that filtered movies must be produced by
-                       selectInput("companySelect",
+                       selectInput("companySelect2",
                                    "Production Company Filter:",
                                    choices = sort(unique(companies)),
                                    multiple = TRUE,
@@ -129,12 +129,12 @@ body <- dashboardBody(
               column(width = 4,
                      wellPanel(
                        # Selection for Movie Genre
-                       selectInput("companySelect",
+                       selectInput("companySelect3",
                                    "Production Company Filter:",
                                    choices = sort(unique(companies)),
                                    multiple = TRUE,
                                    selectize = TRUE,
-                                   selected = c("Marvel Studios", "DC Comics"))
+                                   selected = c("Walt Disney Pictures", "Warner Bros", "Marvel Studios", "DC Comics"))
                      )
               ),
               column(width = 8,
@@ -181,6 +181,55 @@ server <- function(input, output, session = session) {
     return(movies)
   })
   
+  # :::COMPANY REACTIVE METHOD for Page 2::: Filter movie dataset based on production company input
+  movieDataWithCompanyFilterPage2 <- reactive({
+    reactive_movie_data <- as.data.frame(movieData())  # retrieve movie data from reactive method
+    company_selection <- companies         # use all companies if there were 0 companies selected
+    if (length(input$companySelect2) > 0){
+      company_selection <- input$companySelect2 # retrieve selection filter input for Production Company
+    }
+    
+    filtered_data <- head(reactive_movie_data, 0) # start with empty table populated with columns from dataset
+    for(company_display_name in company_selection){
+      # convert company display name to corresponding column name in the dataset
+      colname <- paste(unlist(strsplit(tolower(company_display_name), ' ')), collapse='')
+      movies_by_company <- reactive_movie_data %>% filter(reactive_movie_data[colname] == 1)
+      movies_by_company$Company <- company_display_name
+      filtered_data <- rbind(filtered_data, movies_by_company)
+    }
+    return(filtered_data)
+  })
+  
+  # :::COMPANY REACTIVE METHOD for Page 3::: Similar to method above but for Page 3 inputs/outputs
+  movieDataWithCompanyFilterPage3 <- reactive({
+    reactive_movie_data <- as.data.frame(movieData()) 
+    company_selection <- companies
+    if (length(input$companySelect3) > 0){
+      company_selection <- input$companySelect3 # retrieve selection filter input for Production Company
+    }
+    
+    filtered_data <- head(reactive_movie_data, 0) # start with empty table populated with columns from dataset
+    for(company_display_name in company_selection){
+      # convert company display name to corresponding column name in the dataset
+      colname <- paste(unlist(strsplit(tolower(company_display_name), ' ')), collapse='')
+      movies_by_company <- reactive_movie_data %>% filter(reactive_movie_data[colname] == 1)
+      movies_by_company$Company <- company_display_name
+      filtered_data <- rbind(filtered_data, movies_by_company)
+    }
+    return(filtered_data)
+  })
+  
+  # :::GENRE PAGE REACTIVE DATA METHOD::: Melt movie dataset into genre counts for barchart usage
+  movieDataCountsByGenre <- reactive({
+    movieDataWithCompanyFilterPage3() %>% select(Company, genres, everything()) %>% 
+      group_by(Company) %>% 
+      summarize(Total=n(), Action=sum(Action), Adventure=sum(Adventure), Animation=sum(Animation), 
+                Comedy=sum(Comedy), Crime=sum(Crime), Documentary=sum(Documentary), Drama=sum(Drama), 
+                Family=sum(Family), Fantasy=sum(Fantasy), History=sum(History), Horror=sum(Horror),
+                Romance=sum(Romance), Scifi=sum(Scifi), Thriller=sum(Thriller), War=sum(War)) %>% 
+      select(Company, input$genreSelect) # only select genres picked by the user
+  })
+  
   # :::GAUGES, VALUE/INFO BOXES::: Provide stats based on filtered result from reactive method
   # Info box that calculates most profitable movie based on user input filters
   output$topProfit <- renderInfoBox({
@@ -219,28 +268,9 @@ server <- function(input, output, session = session) {
     ggplotly(scatterplot, tooltip = "text", height = 400)
   })
   
-  # :::COMPANY REACTIVE METHOD::: Filter movie dataset based on production company input
-  movieDataWithCompanyFilter <- reactive({
-    reactive_movie_data <- as.data.frame(movieData())  # retrieve movie data from reactive method
-    company_selection <- companies         # use all companies if there were 0 companies selected
-    if (length(input$companySelect) > 0){
-      company_selection <- input$companySelect # retrieve selection filter input for Production Company
-    }
-    
-    filtered_data <- head(reactive_movie_data, 0) # start with empty table populated with columns from dataset
-    for(company_display_name in company_selection){
-      # convert company display name to corresponding column name in the dataset
-      colname <- paste(unlist(strsplit(tolower(company_display_name), ' ')), collapse='')
-      movies_by_company <- reactive_movie_data %>% filter(reactive_movie_data[colname] == 1)
-      movies_by_company$Company <- company_display_name
-      filtered_data <- rbind(filtered_data, movies_by_company)
-    }
-    return(filtered_data)
-  })
-  
   # :::COMPANY COMPARISON CHART::: Scatterplot that shows budget comparison for selected production companies
   output$company_profits <- renderPlotly({
-    filtered_data <- movieDataWithCompanyFilter() # retrieve filtered movie data from reactive method
+    filtered_data <- movieDataWithCompanyFilterPage2() # retrieve filtered movie data from reactive method
     if(input$xaxisValue == "Runtime"){            # modify column for x-axis based on user input
       xaxis_data <- filtered_data$Runtime
       xaxis_label <- "Duration (in minutes)"
@@ -266,60 +296,13 @@ server <- function(input, output, session = session) {
   
   # :::GENRE BREAKDOWN CHART::: Bar chart that shows genre breakdown for each production company
   output$genres_barchart <- renderPlotly({
-    scatterplot <- ggplot(movieDataWithCompanyFilter(), aes(x = Rating, y = Profit/1000000, color=Company,
-                                                            text = paste0("<b>", Title, " (", Year, ")</b>",
-                                                                          "<br>Rating: ", Rating,
-                                                                          "<br>Profit: ", format_financial_value(Profit)))) + 
-      geom_point() + 
-      geom_hline(yintercept=0, linetype="dashed", color = "red", size=0.5) +
-      ggtitle("Rating vs Profit") +
-      xlab("Rating") +
-      ylab("Profit (in Millions)") +
-      scale_y_continuous(label=scales::dollar_format(big.mark=','))
+    melted_genre_counts <- movieDataCountsByGenre() %>% melt(id.vars = 1, variable.name = 'Genre', value.name = 'Counts')
+    barchart <- ggplot(melted_genre_counts, aes(x = Genre, y = Counts, colour = Company, fill = Company,
+                                                text = paste0("<b>", Company, "</b>",
+                                                              "<br>Genre: ", Genre,
+                                                              "<br>Count: ", Counts))) +
+                  geom_bar(stat="identity", position = "dodge")
     ggplotly(barchart, tooltip = "text", height = 400)
-  })
-  
-  # A plot showing a line chart of movie budget and revenue over the years
-  output$plot_budget_and_revenue <- renderPlotly({
-    # Aggregate budget and revenue data by year
-    aggregatedDataByYear <- movieData() %>% group_by(Year) %>% 
-      summarise(Budget = mean(Budget), Revenue = mean(Revenue))
-    # Plot movie budget and revenue over the years
-    plot_ly(aggregatedDataByYear, x = ~Year, y = ~Revenue, name = 'Revenue', type = 'scatter', mode = 'lines+markers') %>%
-      add_trace(y = ~Budget, name = 'Budget', mode = 'lines+markers') %>%
-      layout(title = "Over the years: Average Revenue vs Budget for Blockbusters",
-             xaxis = list(title = "Year", titlefont = plotlyDefaultFont),
-             yaxis = list(title = "Amount in USD$", titlefont = plotlyDefaultFont),
-             legend = list(orientation = "h", x = 0, y = -0.3),
-             height = 400)
-  })
-  
-  # A plot showing a bar chart of average ratings per genre
-  output$plot_ratings <- renderPlotly({
-    movies <- movieData()
-    # Calculate the average rating for each selected genre and add to vector
-    averageRatingForEachGenre = c()
-    for(genre in input$genreSelect){
-      print(genre)
-      moviesForThisGenre <- filter(movies, as.logical(movies[[genre]]))
-      print(nrow(moviesForThisGenre))
-      averageRatingForEachGenre <- c(averageRatingForEachGenre, mean(moviesForThisGenre$Rating))
-    }
-    # Plot average ratings by MovieLens users for each genre
-    plot_ly(x = input$genreSelect, y = averageRatingForEachGenre, type = 'bar', 
-            marker = list(color = brewer.pal(length(input$genreSelect), "Greens"))) %>%
-      layout(title = "Average Ratings by Genre",
-             xaxis = list(title = "Genre", titlefont = plotlyDefaultFont),
-             yaxis = list(title = "Average Ratings", titlefont = plotlyDefaultFont))
-  })
-  
-  # A plot showing a histogram of movie durations
-  output$plot_durations <- renderPlotly({
-    plot_ly(x = movieData()$Runtime, type = 'histogram') %>%
-      layout(title = "Histogram of Movie Durations",
-             xaxis = list(title = "Duration in Seconds", titlefont = plotlyDefaultFont),
-             yaxis = list(title = "Number of Movies", titlefont = plotlyDefaultFont))
-    
   })
   
   # Data table of Movies (based on reactive selection)
